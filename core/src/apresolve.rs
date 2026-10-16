@@ -130,10 +130,16 @@ impl ApResolver {
 
         self.lock(|inner| {
             let access_point = match endpoint {
-                // take the first position instead of the last with `pop`, because Spotify returns
-                // access points with ports 4070, 443 and 80 in order of preference from highest
-                // to lowest.
-                "accesspoint" => inner.data.accesspoint.pop_front(),
+                "accesspoint" => {
+                    // Prefer 443 for AP sockets only, retaining every other port as a fallback.
+                    let index = inner
+                        .data
+                        .accesspoint
+                        .iter()
+                        .position(|(_, port)| *port == 443)
+                        .unwrap_or(0);
+                    inner.data.accesspoint.remove(index)
+                }
                 "dealer" => inner.data.dealer.pop_front(),
                 "spclient" => inner.data.spclient.pop_front(),
                 _ => {
@@ -149,5 +155,88 @@ impl ApResolver {
 
             Ok(access_point)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{config::SessionConfig, session::Session};
+
+    fn session_with_accesspoints(accesspoints: &[&str]) -> Session {
+        let session = Session::new(
+            SessionConfig {
+                ap_port: None,
+                proxy: None,
+                ..Default::default()
+            },
+            None,
+        );
+        let resolver = session.apresolver();
+        let data = resolver.parse_resolve_to_access_points(ApResolveData {
+            accesspoint: accesspoints
+                .iter()
+                .map(|address| (*address).to_owned())
+                .collect(),
+            dealer: vec!["dealer.test:80".to_owned(), "dealer.test:443".to_owned()],
+            spclient: vec![
+                "spclient.test:80".to_owned(),
+                "spclient.test:443".to_owned(),
+            ],
+        });
+        resolver.lock(|inner| inner.data = data);
+        session
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn accesspoints_prefer_443_without_losing_fallbacks() {
+        let session = session_with_accesspoints(&[
+            "first.test:4070",
+            "secure-a.test:443",
+            "secure-b.test:443",
+            "plain.test:80",
+            "last.test:4070",
+        ]);
+        for (host, port) in [
+            ("secure-a.test", 443),
+            ("secure-b.test", 443),
+            ("first.test", 4070),
+            ("plain.test", 80),
+            ("last.test", 4070),
+        ] {
+            assert_eq!(
+                session.apresolver().resolve("accesspoint").await.unwrap(),
+                (host.to_owned(), port)
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn missing_443_preserves_accesspoint_order() {
+        let session =
+            session_with_accesspoints(&["first.test:4070", "plain.test:80", "last.test:4070"]);
+        for (host, port) in [
+            ("first.test", 4070),
+            ("plain.test", 80),
+            ("last.test", 4070),
+        ] {
+            assert_eq!(
+                session.apresolver().resolve("accesspoint").await.unwrap(),
+                (host.to_owned(), port)
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dealer_and_spclient_keep_their_resolver_order() {
+        for endpoint in ["dealer", "spclient"] {
+            let session = session_with_accesspoints(&["ap.test:443"]);
+            for port in [80, 443] {
+                assert_eq!(
+                    session.apresolver().resolve(endpoint).await.unwrap(),
+                    (format!("{endpoint}.test"), port)
+                );
+            }
+        }
     }
 }
