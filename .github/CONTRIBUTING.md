@@ -59,7 +59,7 @@ Maintainers publish the seven crates with one new version, then update the pins 
 
 ## Credit
 
-After the merge, comment on any spotatui issue or PR with a link to your PR here:
+After the merge, comment on [spotatui#872](https://github.com/LargeModGames/spotatui/issues/872) with a link to your PR here:
 
 ```text
 @all-contributors please add @your-name for code
