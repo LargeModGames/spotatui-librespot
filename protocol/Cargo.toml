@@ -1,6 +1,6 @@
 [package]
 name = "spotatui-librespot-protocol"
-version = "0.8.6"
+version = "0.8.7"
 rust-version.workspace = true
 authors = ["Paul Liétar <paul@lietar.net>"]
 license.workspace = true

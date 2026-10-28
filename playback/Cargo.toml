@@ -1,6 +1,6 @@
 [package]
 name = "spotatui-librespot-playback"
-version = "0.8.6"
+version = "0.8.7"
 rust-version.workspace = true
 authors = ["Sasha Hilton <sashahilton00@gmail.com>"]
 license.workspace = true
@@ -47,9 +47,9 @@ rustls-tls-webpki-roots = [
 ]
 
 [dependencies]
-librespot-audio = { version = "0.8.6", path = "../audio", package = "spotatui-librespot-audio", default-features = false }
-librespot-core = { version = "0.8.6", path = "../core", package = "spotatui-librespot-core", default-features = false }
-librespot-metadata = { version = "0.8.6", path = "../metadata", package = "spotatui-librespot-metadata", default-features = false }
+librespot-audio = { version = "0.8.7", path = "../audio", package = "spotatui-librespot-audio", default-features = false }
+librespot-core = { version = "0.8.7", path = "../core", package = "spotatui-librespot-core", default-features = false }
+librespot-metadata = { version = "0.8.7", path = "../metadata", package = "spotatui-librespot-metadata", default-features = false }
 
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 log = "0.4"
