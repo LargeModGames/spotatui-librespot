@@ -1139,7 +1139,7 @@ impl SpircTask {
 
         if let Some(cluster) = cluster_update.cluster.take() {
             let became_inactive = self.connect_state.is_active()
-                && cluster.active_device_id != self.session.device_id();
+                && is_other_active_device(&cluster.active_device_id, self.session.device_id());
             if became_inactive {
                 info!("device became inactive");
                 self.handle_disconnect(SessionDisconnectReason::ExternalDeviceHandoff)
@@ -2124,9 +2124,26 @@ fn transfer_context_uri(uri: &str, has_tracks: bool) -> Option<String> {
     }
 }
 
+/// Whether a cluster update names another device as the active one.
+/// An empty id means no device is active, which Spotify sends when an idle session lapses.
+fn is_other_active_device(active_device_id: &str, own_device_id: &str) -> bool {
+    !active_device_id.is_empty() && active_device_id != own_device_id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_active_device_id_is_not_another_device() {
+        assert!(!is_other_active_device("", "own"));
+    }
+
+    #[test]
+    fn another_device_id_is_another_device() {
+        assert!(is_other_active_device("phone", "own"));
+        assert!(!is_other_active_device("own", "own"));
+    }
 
     #[test]
     fn a_placeholder_transfer_with_tracks_loads_its_tracks() {
