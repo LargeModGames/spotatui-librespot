@@ -11,6 +11,7 @@ use std::{
 };
 
 use priority_queue::PriorityQueue;
+use tempfile::NamedTempFile;
 use thiserror::Error;
 
 use crate::{Error, FileId, authentication::Credentials, error::ErrorKind};
@@ -159,9 +160,7 @@ impl FsSizeLimiter {
             };
 
             match entry.file_type() {
-                Ok(file_type) if file_type.is_dir() || file_type.is_symlink() => {
-                    Self::init_dir(limiter, &entry.path())
-                }
+                Ok(file_type) if file_type.is_dir() => Self::init_dir(limiter, &entry.path()),
                 Ok(file_type) if file_type.is_file() => {
                     let path = entry.path();
                     match Self::get_metadata(&path) {
@@ -417,12 +416,18 @@ impl Cache {
         }
     }
 
+    /// Copies into a temporary file and persists it, so a failed copy never leaves a
+    /// partial file at the path that `file` opens.
     pub fn save_file<F: Read>(&self, file: FileId, contents: &mut F) -> Result<PathBuf, Error> {
         if let Some(path) = self.file_path(file) {
             if let Some(parent) = path.parent() {
                 if let Ok(size) = fs::create_dir_all(parent)
-                    .and_then(|_| File::create(&path))
-                    .and_then(|mut file| io::copy(contents, &mut file))
+                    .and_then(|_| NamedTempFile::new_in(parent))
+                    .and_then(|mut temp| {
+                        let size = io::copy(contents, &mut temp)?;
+                        temp.persist(&path)?;
+                        Ok(size)
+                    })
                 {
                     if let Some(limiter) = self.size_limiter.as_deref() {
                         limiter.add(&path, size);
@@ -496,5 +501,44 @@ mod test {
         limiter.add(Path::new("f"), 500, ordered_time(2));
         assert!(limiter.remove(Path::new("c")));
         assert!(!limiter.exceeds_limit());
+    }
+
+    struct FailingReader;
+
+    impl Read for FailingReader {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::other("connection lost"))
+        }
+    }
+
+    #[test]
+    fn failed_save_leaves_no_cache_hit() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::new(None, None, Some(dir.path()), Some(1000)).unwrap();
+        let id = FileId([7; 20]);
+        let shard = cache.file_path(id).unwrap().parent().unwrap().to_owned();
+
+        assert!(cache.save_file(id, &mut FailingReader).is_err());
+        assert!(cache.file(id).is_none());
+        assert_eq!(fs::read_dir(&shard).unwrap().count(), 0);
+
+        assert!(cache.save_file(id, &mut &b"audio"[..]).is_ok());
+        assert!(cache.file(id).is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pruning_never_follows_a_symlinked_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("audio");
+        let outside = dir.path().join("outside");
+        fs::create_dir_all(&audio).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("keep"), [0u8; 100]).unwrap();
+        std::os::unix::fs::symlink(&outside, audio.join("ab")).unwrap();
+
+        Cache::new(None, None, Some(&audio), Some(10)).unwrap();
+
+        assert!(outside.join("keep").exists());
     }
 }
