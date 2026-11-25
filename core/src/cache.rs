@@ -160,9 +160,7 @@ impl FsSizeLimiter {
             };
 
             match entry.file_type() {
-                Ok(file_type) if file_type.is_dir() || file_type.is_symlink() => {
-                    Self::init_dir(limiter, &entry.path())
-                }
+                Ok(file_type) if file_type.is_dir() => Self::init_dir(limiter, &entry.path()),
                 Ok(file_type) if file_type.is_file() => {
                     let path = entry.path();
                     match Self::get_metadata(&path) {
@@ -526,5 +524,21 @@ mod test {
 
         assert!(cache.save_file(id, &mut &b"audio"[..]).is_ok());
         assert!(cache.file(id).is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pruning_never_follows_a_symlinked_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let audio = dir.path().join("audio");
+        let outside = dir.path().join("outside");
+        fs::create_dir_all(&audio).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("keep"), [0u8; 100]).unwrap();
+        std::os::unix::fs::symlink(&outside, audio.join("ab")).unwrap();
+
+        Cache::new(None, None, Some(&audio), Some(10)).unwrap();
+
+        assert!(outside.join("keep").exists());
     }
 }
