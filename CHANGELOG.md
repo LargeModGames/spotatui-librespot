@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [core] Add `SpClient::send_player_command` and `SpClient::set_remote_volume` to control another Connect device. Fork-only.
 - [core] Add `SpClient::pathfinder_query` for persisted Pathfinder (GraphQL) queries such as `searchDesktop`. A stale hash fails with `ErrorKind::FailedPrecondition` (HTTP 412). Fork-only.
 - [protocol] Compile `collection2v2.proto` and add its `ContainsRequest` and `ContainsResponse` messages. Fork-only.
+- [core] Export `AuthenticationError` and make `Login5Error` public, so a consumer can tell an access-point exhaustion, a rejected credential and an unsupported code challenge apart by type instead of matching their `Display` text. Fork-only.
 
 ### Changed
 

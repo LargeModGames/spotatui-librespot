@@ -14,6 +14,7 @@ pub mod cdn_url;
 pub mod channel;
 pub mod config;
 mod connection;
+pub use connection::AuthenticationError;
 pub mod date;
 #[allow(dead_code)]
 pub mod dealer;
