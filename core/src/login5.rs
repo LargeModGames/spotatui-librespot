@@ -30,7 +30,7 @@ component! {
 }
 
 #[derive(Debug, Error)]
-enum Login5Error {
+pub enum Login5Error {
     #[error("Login request was denied: {0:?}")]
     FaultyRequest(LoginError),
     #[error("Code challenge is not supported")]
